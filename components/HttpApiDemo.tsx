@@ -1,22 +1,34 @@
 
 import React, { useState, useCallback } from 'react';
 import { Server } from '../types';
-import { fetchServers } from '../services/mockApiService';
 import Card from './Card';
 import { ServerIcon, GlobeAltIcon, ChipIcon } from './icons/Icons';
 
 const HttpApiDemo: React.FC = () => {
   const [servers, setServers] = useState<Server[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [hasFetched, setHasFetched] = useState(false);
 
-  const handleFetchData = useCallback(() => {
+  const handleFetchData = useCallback(async () => {
     setIsLoading(true);
     setHasFetched(true);
-    fetchServers().then((data) => {
+    setError(null);
+    try {
+      const response = await fetch('/api/servers');
+      if (!response.ok) {
+        throw new Error(`Network response was not ok: ${response.statusText}`);
+      }
+      const data: Server[] = await response.json();
       setServers(data);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
+      console.error('An error occurred while fetching servers:', errorMessage);
+      setError(errorMessage);
+      setServers([]); // Clear previous data on error
+    } finally {
       setIsLoading(false);
-    });
+    }
   }, []);
 
   return (
@@ -30,7 +42,7 @@ const HttpApiDemo: React.FC = () => {
       </div>
       
       <div className="flex-grow space-y-4">
-        {!hasFetched && (
+        {!hasFetched && !error && (
           <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-gray-900/50 rounded-lg">
             <p className="text-gray-400">Click the button to fetch the server list.</p>
           </div>
@@ -42,7 +54,7 @@ const HttpApiDemo: React.FC = () => {
           </div>
         )}
 
-        {!isLoading && hasFetched && (
+        {!isLoading && hasFetched && servers.length > 0 && (
           <div className="space-y-3 pr-2 overflow-y-auto max-h-96">
             {servers.map((server) => (
               <div key={server.id} className="bg-gray-700/50 p-4 rounded-lg flex items-center justify-between transition-transform hover:scale-105 duration-200">
@@ -61,6 +73,14 @@ const HttpApiDemo: React.FC = () => {
             ))}
           </div>
         )}
+        
+        {error && (
+          <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-red-900/30 rounded-lg">
+            <p className="text-red-400 font-semibold">Failed to load data</p>
+            <p className="text-gray-400 text-sm mt-1">{error}</p>
+          </div>
+        )}
+
       </div>
 
       <div className="mt-6">

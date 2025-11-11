@@ -1,59 +1,84 @@
+import { Server, ServerMetrics } from '../types';
 
-import { Server, ServerMetrics, ServerStatus } from '../types';
-
-const initialServers: Server[] = [
-  { id: 'srv-db-01', name: 'Database Server 1', ipAddress: '192.168.1.10', location: 'us-east-1' },
-  { id: 'srv-web-01', name: 'Web Server Alpha', ipAddress: '10.0.0.5', location: 'eu-west-2' },
-  { id: 'srv-cache-01', name: 'Redis Cache', ipAddress: '172.16.0.20', location: 'ap-southeast-1' },
-  { id: 'srv-worker-01', name: 'Background Worker', ipAddress: '192.168.2.30', location: 'us-west-2' },
-];
-
-// Simulate a standard HTTP GET request with a delay
-export const fetchServers = (): Promise<Server[]> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(initialServers);
-    }, 1200); // Simulate network latency
-  });
+/**
+ * Fetches the list of servers from the backend HTTP endpoint.
+ * Assumes the endpoint is `/api/servers`.
+ */
+export const fetchServers = async (): Promise<Server[]> => {
+  try {
+    const response = await fetch('/api/servers');
+    if (!response.ok) {
+      // Create a more informative error message
+      const errorText = await response.text();
+      console.error('Failed to fetch servers:', response.status, errorText);
+      throw new Error(`Network response was not ok: ${response.statusText}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('An error occurred while fetching servers:', error);
+    // Re-throw the error so the component can handle it
+    throw error;
+  }
 };
 
-// Simulate a WebSocket connection
-let intervalId: number | null = null;
 
-const generateRandomMetrics = (server: Server): ServerMetrics => {
-  const statuses = [ServerStatus.ONLINE, ServerStatus.ONLINE, ServerStatus.ONLINE, ServerStatus.MAINTENANCE, ServerStatus.OFFLINE];
-  const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
+// WebSocket connection management
+let socket: WebSocket | null = null;
 
-  return {
-    ...server,
-    status: randomStatus,
-    cpuLoad: randomStatus === ServerStatus.ONLINE ? Math.floor(Math.random() * 90) + 10 : 0,
-    memoryUsage: randomStatus === ServerStatus.ONLINE ? Math.floor(Math.random() * 85) + 15 : 0,
+/**
+ * Connects to the real-time metrics WebSocket endpoint.
+ * Assumes the endpoint is available at the same host, path `/ws/metrics`.
+ * @param onData Callback function to handle incoming metric data.
+ */
+export const connectWebSocket = (onData: (data: ServerMetrics[]) => void) => {
+  if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+    console.warn('WebSocket is already connected or connecting.');
+    return;
+  }
+
+  // Determine WebSocket protocol based on current page protocol
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${wsProtocol}//${window.location.host}/ws/metrics`;
+
+  console.log(`Connecting to WebSocket at ${wsUrl}...`);
+  socket = new WebSocket(wsUrl);
+
+  socket.onopen = () => {
+    console.log('WebSocket connection established.');
+  };
+
+  socket.onmessage = (event) => {
+    try {
+      // Assuming the backend sends data as a JSON string
+      const data: ServerMetrics[] = JSON.parse(event.data);
+      onData(data);
+    } catch (error) {
+      console.error('Error parsing WebSocket message:', error);
+    }
+  };
+
+  socket.onerror = (error) => {
+    console.error('WebSocket error:', error);
+  };
+
+  socket.onclose = (event) => {
+    if (event.wasClean) {
+      console.log(`WebSocket connection closed cleanly, code=${event.code} reason=${event.reason}`);
+    } else {
+      console.error('WebSocket connection died');
+    }
+    socket = null;
   };
 };
 
-export const connectWebSocket = (onData: (data: ServerMetrics[]) => void) => {
-  if (intervalId) {
-    clearInterval(intervalId);
-  }
-
-  // Immediately send initial data
-  const initialMetrics = initialServers.map(generateRandomMetrics);
-  onData(initialMetrics);
-
-  // Then start streaming updates
-  intervalId = window.setInterval(() => {
-    const updatedMetrics = initialServers.map(generateRandomMetrics);
-    onData(updatedMetrics);
-  }, 2000); // Send new data every 2 seconds
-
-  console.log('Mock WebSocket connected.');
-};
-
+/**
+ * Disconnects the active WebSocket connection.
+ */
 export const disconnectWebSocket = () => {
-  if (intervalId) {
-    clearInterval(intervalId);
-    intervalId = null;
-    console.log('Mock WebSocket disconnected.');
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    console.log('Disconnecting WebSocket.');
+    socket.close();
+  } else {
+    console.warn('No active WebSocket connection to disconnect.');
   }
 };

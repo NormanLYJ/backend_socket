@@ -1,0 +1,5 @@
+{
+  "name": "Backend API Simulator",
+  "description": "A responsive web application that simulates interacting with backend HTTP and WebSocket APIs, demonstrating both standard data fetching and real-time data streaming in a clean, modern interface.",
+  "requestFramePermissions": []
+}

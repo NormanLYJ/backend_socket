@@ -1,0 +1,33 @@
+import React, { useEffect, useState } from "react";
+
+export default function App() {
+  const [servers, setServers] = useState([]);
+
+  useEffect(() => {
+    const socket = new WebSocket("ws://127.0.0.1:8000/ws");
+
+    socket.onopen = () => console.log("✅ Connected to WebSocket");
+    socket.onclose = () => console.log("❌ Disconnected");
+    socket.onerror = (err) => console.error("WebSocket error:", err);
+
+    socket.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      setServers(message.data);
+    };
+
+    return () => socket.close();
+  }, []);
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>🖥️ Real-Time Server Metrics</h2>
+      {servers.map((srv) => (
+        <div key={srv.id} style={{ border: "1px solid #ccc", margin: "8px 0", padding: "10px" }}>
+          <strong>{srv.name}</strong> ({srv.location})
+          <br />
+          Status: {srv.status} | CPU: {srv.cpu_load}% | Memory: {srv.memory_usage}%
+        </div>
+      ))}
+    </div>
+  );
+}
